@@ -51,6 +51,8 @@ spec:
                   name: "{{- .Release.Name  }}-redis"
                   key: redis-password
             {{- end }}
+            - name: DID_RESOLVER
+              value: {{ .Values.config.didResolver }}
       {{- if .Values.resources }}
         resources:
 {{ toYaml .Values.resources | indent 10 }}

@@ -9,8 +9,8 @@ import (
 	"github.com/eclipse-xfsc/microservice-core-go/pkg/logr"
 	"github.com/eclipse-xfsc/oid4-vci-issuer-service/internal/service"
 	"github.com/eclipse-xfsc/oid4-vci-vp-library/model/credential"
-	crypto "github.com/eclipse-xfsc/ssi-jwt"
-	"github.com/eclipse-xfsc/ssi-jwt/fetcher"
+	crypto "github.com/eclipse-xfsc/ssi-jwt/v2"
+	"github.com/eclipse-xfsc/ssi-jwt/v2/fetcher"
 	"github.com/gin-gonic/gin"
 )
 

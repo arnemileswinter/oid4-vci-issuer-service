@@ -58,6 +58,7 @@ config:
     timeoutInSec: 10
   logLevel: info
   servingPort: 8080
+  didResolver: 
   # database:
     # username: default
     # password: pass
