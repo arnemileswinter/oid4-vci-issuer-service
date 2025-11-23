@@ -34,23 +34,23 @@ func NewCredentialService(ceConfig ce.Config, logger logr.Logger) CredentialServ
 	}
 }
 
-func (s CredentialService) Offer(ctx context.Context, req messaging.OfferingURLReq, params messaging.AuthorizationReq) (*credential.CredentialOffer, error) {
+func (s CredentialService) Offer(ctx context.Context, req messaging.OfferingURLReq, params messaging.AuthorizationReq) (*credential.CredentialOffer, *string, error) {
 	if err := params.Validate(); err != nil {
 		s.log.Error(err, "currentOffer not valid")
 
-		return nil, err
+		return nil, nil, err
 	}
 
 	if params.GrantType != supportedGrantType {
 		err := fmt.Errorf("grantType '%s' is not supported", params.GrantType)
 		s.log.Error(err, "could not proceed with offer")
 
-		return nil, err
+		return nil, nil, err
 	}
 
 	_, issuer, err := s.GetCredentialIssuer(ctx, req.TenantId, nil, params.CredentialConfigurations)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	preAuthRequestData, err := json.Marshal(preAuth.GenerateAuthorizationReq{
@@ -70,26 +70,26 @@ func (s CredentialService) Offer(ctx context.Context, req messaging.OfferingURLR
 
 	if err != nil {
 		s.log.Error(err, "could not marshal preAuthRequestData")
-		return nil, err
+		return nil, nil, err
 	}
 
 	preAuthRequestEvent, err := cloudeventprovider.NewEvent(messaging.SourceIssuanceService, "pre.auth.request.v1", preAuthRequestData)
 	if err != nil {
 		s.log.Error(err, "could not create preAuthRequestEvent")
 
-		return nil, err
+		return nil, nil, err
 	}
 
 	preAuthClient, err := ce.New(s.cloudEventConfig, ce.ConnectionTypeReq, preAuth.TopicGenerateAuthorization)
 	if err != nil {
 		s.log.Error(err, "error creating auth client")
-		return nil, err
+		return nil, nil, err
 	}
 
 	preAuthReplyEvent, err := preAuthClient.RequestCtx(ctx, preAuthRequestEvent)
 	if err != nil {
 		s.log.Error(err, "error in request ctx")
-		return nil, err
+		return nil, nil, err
 	}
 
 	if preAuthReplyEvent != nil {
@@ -97,7 +97,7 @@ func (s CredentialService) Offer(ctx context.Context, req messaging.OfferingURLR
 		var preAuthReplyData preAuth.GenerateAuthorizationRep
 		if err = json.Unmarshal(preAuthReplyEvent.Data(), &preAuthReplyData); err != nil {
 			s.log.Error(err, "could not unmarshal preAuth.GenerateAuthorizationRep")
-			return nil, err
+			return nil, nil, err
 		}
 
 		var configIds []string
@@ -124,11 +124,11 @@ func (s CredentialService) Offer(ctx context.Context, req messaging.OfferingURLR
 		link, err := parameters.CreateOfferLink()
 
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return link, nil
+		return link, &preAuthReplyData.Code, nil
 	} else {
-		return nil, errors.New("no auth code availble")
+		return nil, nil, errors.New("no auth code availble")
 	}
 
 }

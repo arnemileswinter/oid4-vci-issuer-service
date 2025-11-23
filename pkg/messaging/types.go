@@ -32,6 +32,7 @@ type Proof struct {
 type OfferingURLResp struct {
 	common.Reply
 	CredentialOffer credential.CredentialOffer
+	Code            string
 }
 
 type OfferingURLReq struct {
@@ -60,6 +61,7 @@ type TwoFactor struct {
 type IssuanceModuleReq struct {
 	common.Request
 	CredentialConfiguration credential.CredentialConfigurationIdentifier
+	Code                    string
 	Format                  string
 	Subject                 string
 	Nonce                   string
