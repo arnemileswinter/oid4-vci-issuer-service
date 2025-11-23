@@ -79,7 +79,7 @@ func (g NatsGateway) offerHandler(ctx context.Context, event event.Event) (*even
 		return nil, err
 	}
 
-	offer, err := g.svc.Offer(ctx, req.TenantId, req.Params)
+	offer, err := g.svc.Offer(ctx, req, req.Params)
 	if err != nil {
 		g.log.Error(err, "failed to create credential offer url")
 		return nil, err

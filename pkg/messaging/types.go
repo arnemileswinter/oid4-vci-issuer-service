@@ -40,11 +40,15 @@ type OfferingURLReq struct {
 }
 
 type AuthorizationReq struct {
-	CredentialType       string    `json:"credentialType"`
-	CredentialIdentifier []string  `json:"credentialIdentifier"`
-	GrantType            string    `json:"grantType"`
-	TwoFactor            TwoFactor `json:"twoFactor"`
-	Nonce                string    `json:"nonce"`
+	Subject                  string                                         `json:"subject"`
+	CredentialConfigurations []credential.CredentialConfigurationIdentifier `json:"credentialConfiguration"`
+	GrantType                string                                         `json:"grantType"`
+	//Ignored when grant type authorization code
+	TwoFactor TwoFactor `json:"twoFactor"`
+	//Ignored when grant type authorization code
+	Nonce string `json:"nonce"`
+	//Ignored when granttype is preauth code
+	IssuerState string `json:"issuerState"`
 }
 
 type TwoFactor struct {
@@ -55,12 +59,12 @@ type TwoFactor struct {
 
 type IssuanceModuleReq struct {
 	common.Request
-	CredentialConfigId   string
-	CredentialIdentifier string
-	Format               string
-	Code                 string
-	Holder               string
-	ProofType            string
+	CredentialConfiguration []credential.CredentialConfigurationIdentifier
+	Format                  string
+	Subject                 string
+	Nonce                   string
+	Holder                  string
+	ProofType               string
 }
 
 type IssuanceModuleRep struct {
@@ -70,12 +74,13 @@ type IssuanceModuleRep struct {
 }
 
 func (u AuthorizationReq) Validate() error {
-	if u.CredentialType == "" {
-		return fmt.Errorf("credentialType not set")
-	}
 
 	if u.GrantType == "" {
 		return fmt.Errorf("grantType not set")
+	}
+
+	if len(u.CredentialConfigurations) == 0 {
+		return fmt.Errorf("no credential configuration set")
 	}
 
 	return nil
