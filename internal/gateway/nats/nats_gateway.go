@@ -93,6 +93,7 @@ func (g NatsGateway) offerHandler(ctx context.Context, event event.Event) (*even
 		},
 		CredentialOffer: *offer,
 		Code:            *code,
+		Subject:         req.BuildSubject(),
 	}
 
 	offerReplyData, err := json.Marshal(reply)

@@ -33,6 +33,7 @@ type OfferingURLResp struct {
 	common.Reply
 	CredentialOffer credential.CredentialOffer
 	Code            string
+	Subject         string
 }
 
 type OfferingURLReq struct {
