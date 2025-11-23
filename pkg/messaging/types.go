@@ -59,7 +59,7 @@ type TwoFactor struct {
 
 type IssuanceModuleReq struct {
 	common.Request
-	CredentialConfiguration []credential.CredentialConfigurationIdentifier
+	CredentialConfiguration credential.CredentialConfigurationIdentifier
 	Format                  string
 	Subject                 string
 	Nonce                   string

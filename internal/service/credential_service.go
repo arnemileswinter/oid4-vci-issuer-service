@@ -158,15 +158,13 @@ func (s CredentialService) GetCredential(ctx context.Context, authRep *preAuth.V
 
 	//Build Data for Plugin
 	credentialRequestData, err := json.Marshal(messaging.IssuanceModuleReq{
-		Request: cmReq,
-		CredentialConfiguration: []credential.CredentialConfigurationIdentifier{
-			identifier,
-		},
-		Format:    req.Format,
-		Nonce:     authRep.Nonce,
-		Subject:   cmReq.BuildSubject(),
-		Holder:    *req.Proof.GetProof(),
-		ProofType: req.Proof.ProofType,
+		Request:                 cmReq,
+		CredentialConfiguration: identifier,
+		Format:                  req.Format,
+		Nonce:                   authRep.Nonce,
+		Subject:                 cmReq.BuildSubject(),
+		Holder:                  *req.Proof.GetProof(),
+		ProofType:               req.Proof.ProofType,
 	})
 
 	if err != nil {
