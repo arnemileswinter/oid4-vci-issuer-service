@@ -5,6 +5,7 @@ import (
 
 	"github.com/eclipse-xfsc/nats-message-library/common"
 	"github.com/eclipse-xfsc/oid4-vci-vp-library/model/credential"
+	"github.com/eclipse-xfsc/oid4-vci-vp-library/model/oauth"
 )
 
 const SourceIssuanceService = "issuance"
@@ -43,6 +44,7 @@ type OfferingURLReq struct {
 
 type AuthorizationReq struct {
 	Subject                  string                                         `json:"subject"`
+	Claims                   []oauth.Claim                                  `json:"subject,omitempty"`
 	CredentialConfigurations []credential.CredentialConfigurationIdentifier `json:"credentialConfiguration"`
 	GrantType                string                                         `json:"grantType"`
 	//Ignored when grant type authorization code
@@ -62,6 +64,7 @@ type TwoFactor struct {
 type IssuanceModuleReq struct {
 	common.Request
 	CredentialConfiguration credential.CredentialConfigurationIdentifier
+	Claims                  []oauth.Claim
 	Code                    string
 	Format                  string
 	Subject                 string
