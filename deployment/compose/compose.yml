@@ -1,0 +1,146 @@
+version: "3.9"
+
+services:
+  nats:
+    image: nats:latest
+    restart: always
+    ports:
+      - '4222:4222' # NATS server port
+      - '8222:8222' # NATS server monitoring port
+    networks:
+      - internal
+  redis:
+    image: redis:6.2-alpine
+    restart: always
+    ports:
+      - '6379:6379'
+    command: redis-server --save 20 1 --loglevel warning --requirepass xxxxxxxxx
+    volumes:
+      - redis:/data
+    networks:
+      - internal
+  vaultPlugin:
+    image: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/tsa/crypto-provider-hashicorp-vault-plugin:v2.0.5
+    networks: 
+      - internal
+    ports:
+      - 50051:50051
+    environment:
+      - VAULT_ADRESS=http://vault:8200
+      - VAULT_TOKEN=test
+      - CRYPTO_GRPC_ADDR=0.0.0.0:50051
+
+  signer:
+    image: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/tsa/signer:v2.0.6-alpha
+    networks:
+      - internal
+    ports:
+      - '8888:8080'
+    depends_on:
+      - nats
+    environment:
+        SDJWT_SERVICE_URL: http://sdjwt:3000
+        VAULT_ADRESS: http://vault:8200
+        VAULT_TOKEN: test
+        GRPC_ADRESS: 
+        NATS_HOST: nats://nats:4222
+        NATS_TOPIC: signer-topic
+        NATS_STATUS_TOPIC: status.data.create
+        NATS_STATUS_VERIFY_TOPIC: status.data.verify
+        CLOUDEVENTPROVIDER_MESSAGING_PROTOCOL: nats
+        CLOUDEVENTPROVIDER_MESSAGING_NATS_URL: nats://nats:4222
+        CRYPTO_GRPC_ADDR: vaultPlugin:50051
+  vault:
+    image: hashicorp/vault
+    ports:
+      - 8200:8200
+    networks:
+      - internal
+      
+    environment:
+      - VAULT_DEV_ROOT_TOKEN_ID=test
+    healthcheck:
+      test: [ "CMD-SHELL", "sh -c 'VAULT_ADDR=http://vault:8200 vault status'"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+  preauth:
+    image: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/ocm-wstack/pre-authorization-bridge:v2.2.1
+    environment:
+      PREAUTHBRIDGE_NATS_URL: "nats://nats:4222"
+      PREAUTHBRIDGE_LISTEN_ADDR: "0.0.0.0"
+      PREAUTHBRIDGE_LISTEN_PORT: "8081"
+      PREAUTHBRIDGE_REDIS_HOSTS: "redis:6379"
+      PREAUTHBRIDGE_OAUTH_SIGNER_TOPIC: "signer-topic"
+      PREAUTHBRIDGE_OAUTH_SIGNER_JWKS_URL: "http://signer:8080/v1/jwks"
+      PREAUTHBRIDGE_OAUTH_CREDENTIALENDPOINT: "test"
+      PREAUTHBRIDGE_OAUTH_KEY: "eckey"
+      PREAUTHBRIDGE_OAUTH_NAMESPACE: "signer"
+      PREAUTHBRIDGE_REDIS_PASSWORD: "xxxxxxxxx"
+      PREAUTHBRIDGE_OAUTH_ISSUER_KID: "eckey"
+      PREAUTHBRIDGE_WELLKNOWN_JWKS: "http://localhost:8081/.well-known/jwks.json"
+    ports:
+      - 8081:8081
+    networks:
+      - internal
+
+  well_known_service:
+    image: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/ocm-wstack/well-known-service:main
+    networks:
+      - internal
+    ports:
+      - 8084:8084
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    environment:
+      WELLKNOWN_SERVICE_LOG_LEVEL: INFO
+      WELLKNOWN_SERVICE_IS_DEV: "false"
+      WELLKNOWN_SERVICE_LISTEN_ADDR: 0.0.0.0
+      WELLKNOWN_SERVICE_LISTEN_PORT: 8084
+      WELLKNOWN_SERVICE_POSTGRES_HOST: postgres
+      WELLKNOWN_SERVICE_POSTGRES_PORT: 5432
+      WELLKNOWN_SERVICE_POSTGRES_DATABASE: postgres
+      WELLKNOWN_SERVICE_POSTGRES_USER: postgres
+      WELLKNOWN_SERVICE_POSTGRES_PASSWORD: postgres
+      WELLKNOWN_SERVICE_POSTGRES_PARAMS: "sslmode:disable"
+      WELLKNOWN_SERVICE_NATS_URL: nats
+      WELLKNOWN_SERVICE_NATS_QUEUE_GROUP: wellknown
+      WELLKNOWN_SERVICE_NATS_REQUEST_TIMEOUT: 10s
+      WELLKNOWN_SERVICE_OPEN_ID_ISSUER: dummycontentsigner
+      WELLKNOWN_SERVICE_CREDENTIAL_ISSUER_IMPORTER: BROADCAST
+      WELLKNOWN_SERVICE_CREDENTIAL_GIT_IMAGE_PATH:
+      WELLKNOWN_SERVICE_CREDENTIAL_GIT_REPO:
+      WELLKNOWN_SERVICE_CREDENTIAL_GIT_TOKEN:
+      WELLKNOWN_SERVICE_CREDENTIAL_GIT_INTERVAL: ""
+
+  postgres:
+    image: postgres:14-alpine
+    networks:
+      - internal
+      
+    ports:
+      - 5432:5432
+    volumes:
+#      - ./data:/var/lib/postgresql/data
+     - ./scripts/sql:/docker-entrypoint-initdb.d
+
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=postgres
+
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'pg_isready -U postgres -d postgres'"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+networks:
+  internal:
+volumes:
+  redis:
+    driver: local

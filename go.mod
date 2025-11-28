@@ -35,10 +35,11 @@ require (
 	github.com/eapache/go-xerial-snappy v0.0.0-20230731223053-c322873962e3 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/eclipse-xfsc/crypto-provider-core v1.4.1 // indirect
+	github.com/eclipse-xfsc/crypto-provider-service v1.1.6 // indirect
 	github.com/eclipse-xfsc/did-core/v2 v2.1.0 // indirect
-	github.com/eclipse-xfsc/nats-message-library v1.2.0 // indirect
-	github.com/eclipse-xfsc/oid4-vci-authorization-bridge v1.3.0 // indirect
-	github.com/eclipse-xfsc/oid4-vci-vp-library v1.5.0 // indirect
+	github.com/eclipse-xfsc/nats-message-library v1.3.0 // indirect
+	github.com/eclipse-xfsc/oid4-vci-authorization-bridge/v2 v2.2.0 // indirect
+	github.com/eclipse-xfsc/oid4-vci-vp-library v1.6.5 // indirect
 	github.com/eclipse-xfsc/ssi-jwt/v2 v2.1.0 // indirect
 	github.com/eclipse/paho.golang v0.12.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
@@ -109,6 +110,7 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.52.0 // indirect
 	github.com/valyala/tcplisten v1.0.0 // indirect
+	gitlab.eclipse.org/eclipse/xfsc/organisational-credential-manager-w-stack/libraries/messaging v1.10.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect

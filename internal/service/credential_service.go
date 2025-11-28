@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	cloudeventprovider "github.com/eclipse-xfsc/cloud-event-provider"
-	preAuth "github.com/eclipse-xfsc/oid4-vci-authorization-bridge/pkg/messaging"
+	preAuth "github.com/eclipse-xfsc/oid4-vci-authorization-bridge/v2/pkg/messaging"
 
 	ce "github.com/eclipse-xfsc/cloud-event-provider"
 	"github.com/eclipse-xfsc/microservice-core-go/pkg/logr"
@@ -34,61 +34,62 @@ func NewCredentialService(ceConfig ce.Config, logger logr.Logger) CredentialServ
 	}
 }
 
-func (s CredentialService) Offer(ctx context.Context, tenantID string, params messaging.AuthorizationReq) (*credential.CredentialOffer, error) {
+func (s CredentialService) Offer(ctx context.Context, req messaging.OfferingURLReq, params messaging.AuthorizationReq) (*credential.CredentialOffer, *string, error) {
 	if err := params.Validate(); err != nil {
 		s.log.Error(err, "currentOffer not valid")
 
-		return nil, err
+		return nil, nil, err
 	}
 
 	if params.GrantType != supportedGrantType {
 		err := fmt.Errorf("grantType '%s' is not supported", params.GrantType)
 		s.log.Error(err, "could not proceed with offer")
 
-		return nil, err
+		return nil, nil, err
 	}
 
-	_, issuer, err := s.GetCredentialIssuer(ctx, tenantID, nil, &params.CredentialType)
+	_, issuer, err := s.GetCredentialIssuer(ctx, req.TenantId, nil, params.CredentialConfigurations)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	preAuthRequestData, err := json.Marshal(preAuth.GenerateAuthorizationReq{
 		Request: common.Request{
-			TenantId:  tenantID,
-			RequestId: uuid.NewString(),
+			TenantId:  req.TenantId,
+			RequestId: req.RequestId,
+			GroupId:   req.GroupId,
 		},
-		Nonce:                     params.Nonce,
-		CredentialConfigurationId: params.CredentialType,
-		CredentialIdentifier:      params.CredentialIdentifier,
+		Nonce:                    params.Nonce,
+		CredentialConfigurations: params.CredentialConfigurations,
 		TwoFactor: preAuth.TwoFactor{
 			Enabled:          params.TwoFactor.Enabled,
 			RecipientType:    params.TwoFactor.RecipientType,
 			RecipientAddress: params.TwoFactor.RecipientAddress,
 		},
 	})
+
 	if err != nil {
 		s.log.Error(err, "could not marshal preAuthRequestData")
-		return nil, err
+		return nil, nil, err
 	}
 
 	preAuthRequestEvent, err := cloudeventprovider.NewEvent(messaging.SourceIssuanceService, "pre.auth.request.v1", preAuthRequestData)
 	if err != nil {
 		s.log.Error(err, "could not create preAuthRequestEvent")
 
-		return nil, err
+		return nil, nil, err
 	}
 
 	preAuthClient, err := ce.New(s.cloudEventConfig, ce.ConnectionTypeReq, preAuth.TopicGenerateAuthorization)
 	if err != nil {
 		s.log.Error(err, "error creating auth client")
-		return nil, err
+		return nil, nil, err
 	}
 
 	preAuthReplyEvent, err := preAuthClient.RequestCtx(ctx, preAuthRequestEvent)
 	if err != nil {
 		s.log.Error(err, "error in request ctx")
-		return nil, err
+		return nil, nil, err
 	}
 
 	if preAuthReplyEvent != nil {
@@ -96,12 +97,18 @@ func (s CredentialService) Offer(ctx context.Context, tenantID string, params me
 		var preAuthReplyData preAuth.GenerateAuthorizationRep
 		if err = json.Unmarshal(preAuthReplyEvent.Data(), &preAuthReplyData); err != nil {
 			s.log.Error(err, "could not unmarshal preAuth.GenerateAuthorizationRep")
-			return nil, err
+			return nil, nil, err
+		}
+
+		var configIds []string
+
+		for _, c := range params.CredentialConfigurations {
+			configIds = append(configIds, c.Id)
 		}
 
 		parameters := credential.CredentialOfferParameters{
 			CredentialIssuer: *issuer,
-			Credentials:      []string{params.CredentialType},
+			Credentials:      configIds,
 			Grants: credential.Grants{
 				PreAuthorizedCode: &credential.PreAuthorizedCode{
 					PreAuthorizationCode: preAuthReplyData.Authentication.Code,
@@ -117,36 +124,54 @@ func (s CredentialService) Offer(ctx context.Context, tenantID string, params me
 		link, err := parameters.CreateOfferLink()
 
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return link, nil
+		return link, &preAuthReplyData.Code, nil
 	} else {
-		return nil, errors.New("no auth code availble")
+		return nil, nil, errors.New("no auth code availble")
 	}
 
 }
 
-func (s CredentialService) GetCredential(ctx context.Context, tenantID string, req credential.CredentialRequest, nonce string, configurationId *string) (*types.GetCredentialRespImmediate, error) {
+func (s CredentialService) GetCredential(ctx context.Context, authRep *preAuth.ValidateAuthenticationRep, req credential.CredentialRequest, code string) (*types.GetCredentialRespImmediate, error) {
 
-	conf, _, err := s.GetCredentialIssuer(ctx, tenantID, &req.Format, configurationId)
+	identifier := credential.CredentialConfigurationIdentifier{
+		Id: req.CredentialConfigurationId,
+	}
+
+	if req.CredentialIdentifier != "" {
+		identifier.CredentialIdentifier = []string{req.CredentialIdentifier}
+	}
+
+	conf, _, err := s.GetCredentialIssuer(ctx, authRep.TenantId, &req.Format, []credential.CredentialConfigurationIdentifier{identifier})
 	if err != nil {
 		s.log.Error(err, "error during get credential issuer")
 		return nil, err
 	}
-	s.log.Info(fmt.Sprintf("Credential requested for %s and type %s", req.Format, req.CredentialIdentifier))
 
-	credentialRequestData, err := json.Marshal(messaging.IssuanceModuleReq{
-		Request: common.Request{
-			TenantId:  tenantID,
-			RequestId: uuid.NewString(),
-		},
-		CredentialConfigId:   *configurationId,
-		CredentialIdentifier: req.CredentialIdentifier,
-		Format:               req.Format,
-		Code:                 nonce,
-		Holder:               *req.Proof.GetProof(),
-		ProofType:            req.Proof.ProofType,
-	})
+	s.log.Info(fmt.Sprintf("Credential requested for %s and type %s", req.Format, req.CredentialIdentifier))
+	cmReq := common.Request{
+		TenantId:  authRep.TenantId,
+		RequestId: authRep.RequestId,
+		GroupId:   authRep.GroupId,
+	}
+
+	issReq := messaging.IssuanceModuleReq{
+		Request:                 cmReq,
+		CredentialConfiguration: identifier,
+		Format:                  req.Format,
+		Nonce:                   authRep.Nonce,
+		Subject:                 cmReq.BuildSubject(),
+		Code:                    code,
+	}
+
+	if req.Proof != nil {
+		issReq.Holder = *req.Proof.GetProof()
+		issReq.ProofType = req.Proof.ProofType
+	}
+
+	//Build Data for Plugin
+	credentialRequestData, err := json.Marshal(issReq)
 
 	if err != nil {
 		s.log.Error(err, "error during issuing marshalling")
@@ -189,18 +214,19 @@ func (s CredentialService) GetCredential(ctx context.Context, tenantID string, r
 
 		return &types.GetCredentialRespImmediate{
 			Reply: common.Reply{
-				TenantId:  tenantID,
-				RequestId: uuid.NewString(),
+				TenantId:  authRep.TenantId,
+				RequestId: authRep.RequestId,
+				GroupId:   authRep.GroupId,
 			},
 			Credential: credentialReply.Credential,
-			CNonce:     nonce,
+			CNonce:     authRep.Nonce,
 			Format:     credentialReply.Format,
 		}, nil
 	}
 
 	return &types.GetCredentialRespImmediate{
 		Reply: common.Reply{
-			TenantId:  tenantID,
+			TenantId:  authRep.TenantId,
 			RequestId: uuid.NewString(),
 			Error: &common.Error{
 				Status: 500,
@@ -210,8 +236,8 @@ func (s CredentialService) GetCredential(ctx context.Context, tenantID string, r
 	}, nil
 }
 
-func (s CredentialService) GetCredentialIssuer(ctx context.Context, tenantID string, format, credentialType *string) (*credential.CredentialConfiguration, *string, error) {
-	if format == nil && credentialType == nil {
+func (s CredentialService) GetCredentialIssuer(ctx context.Context, tenantID string, format *string, credentialConfigurations []credential.CredentialConfigurationIdentifier) (*credential.CredentialConfiguration, *string, error) {
+	if format == nil && len(credentialConfigurations) == 0 {
 		return nil, nil, credential.ErrInvalidCredentialRequest
 	}
 
@@ -220,9 +246,11 @@ func (s CredentialService) GetCredentialIssuer(ctx context.Context, tenantID str
 		return nil, nil, err
 	}
 
-	if credentialType != nil {
-		if conf, ok := issuer.CredentialConfigurationsSupported[*credentialType]; ok {
-			return &conf, &issuer.CredentialIssuer, nil
+	if len(credentialConfigurations) != 0 {
+		for _, c := range credentialConfigurations {
+			if conf, ok := issuer.CredentialConfigurationsSupported[c.Id]; ok {
+				return &conf, &issuer.CredentialIssuer, nil
+			}
 		}
 
 		return nil, nil, credential.ErrUnsupportedCredentialType
@@ -282,14 +310,14 @@ func (s CredentialService) GetCompleteCredentialIssuer(ctx context.Context, tena
 	return credentialIssuer.Issuer, nil
 }
 
-func (s CredentialService) VerifyAuthToken(ctx context.Context, headerValue string) (string, *string, error) {
+func (s CredentialService) VerifyAuthToken(ctx context.Context, headerValue string) (*preAuth.ValidateAuthenticationRep, error) {
 	if headerValue == "" {
-		return "", nil, fmt.Errorf("missing Authorization")
+		return nil, fmt.Errorf("missing Authorization")
 	}
 
 	parts := strings.Split(headerValue, " ")
 	if !strings.EqualFold(parts[0], "Bearer") {
-		return "", nil, fmt.Errorf("invalid authorization header, expecting Bearer token")
+		return nil, fmt.Errorf("invalid authorization header, expecting Bearer token")
 	}
 
 	token := parts[1]
@@ -305,60 +333,39 @@ func (s CredentialService) VerifyAuthToken(ctx context.Context, headerValue stri
 
 	reqJson, err := json.Marshal(req)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	validateEvent, err := ce.NewEvent(messaging.SourceIssuanceService, preAuth.EventTypeValidation, reqJson)
 
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	authClient, err := s.getCloudEventClient(ce.ConnectionTypeReq, preAuth.TopicValidation)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	respEvent, err := authClient.RequestCtx(ctx, validateEvent)
 	if err != nil {
-		return "", nil, err
+		return nil, err
+	}
+
+	if respEvent == nil {
+		return nil, errors.New("token not more valid")
 	}
 
 	var reply preAuth.ValidateAuthenticationRep
 	if err := json.Unmarshal(respEvent.Data(), &reply); err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	if !reply.Valid {
-		return "", nil, fmt.Errorf("invalid nonce")
+		return nil, fmt.Errorf("invalid nonce")
 	}
 
-	return reply.Nonce, reply.CredentialConfigurationId, nil
-}
-
-func (s CredentialService) ValidateProof(proof credential.Proof, audience *string, nonce string) (bool, error) {
-
-	tok, err := proof.CheckProof(*audience, nonce)
-
-	if err != nil {
-		return false, err
-	}
-
-	token := *tok
-
-	nonceInf, isSet := token.Get("nonce")
-	if !isSet {
-		return false, fmt.Errorf("invalid authorization specified (missing nonce)")
-	}
-
-	if _, ok := nonceInf.(string); !ok {
-		return false, fmt.Errorf("invalid nonce sepcified (expected string)")
-	}
-
-	if nonceInf.(string) != nonce {
-		return false, fmt.Errorf("nonce is not matching")
-	}
-	return true, nil
+	return &reply, nil
 }
 
 func (s CredentialService) getCloudEventClient(connectionType ce.ConnectionType, topic string) (*ce.CloudEventProviderClient, error) {

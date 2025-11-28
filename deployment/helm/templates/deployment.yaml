@@ -44,13 +44,6 @@ spec:
               value: {{ .Values.server.http.host }}
             - name: ISSUANCE_LISTEN_PORT
               value: "{{ .Values.server.http.port }}"
-            {{- if .Values.config.database }}
-            - name: ISSUANCE_DATABASE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: "{{- .Release.Name  }}-redis"
-                  key: redis-password
-            {{- end }}
             - name: DID_RESOLVER
               value: {{ .Values.config.didResolver }}
       {{- if .Values.resources }}
