@@ -19,8 +19,19 @@ services:
       - redis:/data
     networks:
       - internal
+  vaultPlugin:
+    image: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/tsa/crypto-provider-hashicorp-vault-plugin:v2.0.5
+    networks: 
+      - internal
+    ports:
+      - 50051:50051
+    environment:
+      - VAULT_ADRESS=http://vault:8200
+      - VAULT_TOKEN=test
+      - CRYPTO_GRPC_ADDR=0.0.0.0:50051
+
   signer:
-    image: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/tsa/signer:main
+    image: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/tsa/signer:v2.0.6-alpha
     networks:
       - internal
     ports:
@@ -31,13 +42,14 @@ services:
         SDJWT_SERVICE_URL: http://sdjwt:3000
         VAULT_ADRESS: http://vault:8200
         VAULT_TOKEN: test
+        GRPC_ADRESS: 
         NATS_HOST: nats://nats:4222
         NATS_TOPIC: signer-topic
         NATS_STATUS_TOPIC: status.data.create
         NATS_STATUS_VERIFY_TOPIC: status.data.verify
         CLOUDEVENTPROVIDER_MESSAGING_PROTOCOL: nats
         CLOUDEVENTPROVIDER_MESSAGING_NATS_URL: nats://nats:4222
-        ENGINE_PATH: /opt/plugins/hashicorp-vault-provider.so
+        CRYPTO_GRPC_ADDR: vaultPlugin:50051
   vault:
     image: hashicorp/vault
     ports:
@@ -54,7 +66,7 @@ services:
       retries: 5
       start_period: 5s
   preauth:
-    image: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/ocm-wstack/pre-authorization-bridge:v2.1.0
+    image: node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/ocm-wstack/pre-authorization-bridge:v2.2.1
     environment:
       PREAUTHBRIDGE_NATS_URL: "nats://nats:4222"
       PREAUTHBRIDGE_LISTEN_ADDR: "0.0.0.0"
@@ -66,8 +78,8 @@ services:
       PREAUTHBRIDGE_OAUTH_KEY: "eckey"
       PREAUTHBRIDGE_OAUTH_NAMESPACE: "signer"
       PREAUTHBRIDGE_REDIS_PASSWORD: "xxxxxxxxx"
-      PREAUTHBRIDGE_OAUTH_ISSUER_KID: "did:web:localhost:8080#eckey"
-      PREAUTHBRIDGE_WELLKNOWN_JWKS: "http://localhost:8081/jwks.json"
+      PREAUTHBRIDGE_OAUTH_ISSUER_KID: "eckey"
+      PREAUTHBRIDGE_WELLKNOWN_JWKS: "http://localhost:8081/.well-known/jwks.json"
     ports:
       - 8081:8081
     networks:

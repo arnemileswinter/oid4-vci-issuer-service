@@ -133,7 +133,7 @@ func (s CredentialService) Offer(ctx context.Context, req messaging.OfferingURLR
 
 }
 
-func (s CredentialService) GetCredential(ctx context.Context, authRep *preAuth.ValidateAuthenticationRep, req credential.CredentialRequest) (*types.GetCredentialRespImmediate, error) {
+func (s CredentialService) GetCredential(ctx context.Context, authRep *preAuth.ValidateAuthenticationRep, req credential.CredentialRequest, code string) (*types.GetCredentialRespImmediate, error) {
 
 	identifier := credential.CredentialConfigurationIdentifier{
 		Id: req.CredentialConfigurationId,
@@ -156,16 +156,22 @@ func (s CredentialService) GetCredential(ctx context.Context, authRep *preAuth.V
 		GroupId:   authRep.GroupId,
 	}
 
-	//Build Data for Plugin
-	credentialRequestData, err := json.Marshal(messaging.IssuanceModuleReq{
+	issReq := messaging.IssuanceModuleReq{
 		Request:                 cmReq,
 		CredentialConfiguration: identifier,
 		Format:                  req.Format,
 		Nonce:                   authRep.Nonce,
 		Subject:                 cmReq.BuildSubject(),
-		Holder:                  *req.Proof.GetProof(),
-		ProofType:               req.Proof.ProofType,
-	})
+		Code:                    code,
+	}
+
+	if req.Proof != nil {
+		issReq.Holder = *req.Proof.GetProof()
+		issReq.ProofType = req.Proof.ProofType
+	}
+
+	//Build Data for Plugin
+	credentialRequestData, err := json.Marshal(issReq)
 
 	if err != nil {
 		s.log.Error(err, "error during issuing marshalling")
@@ -344,6 +350,10 @@ func (s CredentialService) VerifyAuthToken(ctx context.Context, headerValue stri
 	respEvent, err := authClient.RequestCtx(ctx, validateEvent)
 	if err != nil {
 		return nil, err
+	}
+
+	if respEvent == nil {
+		return nil, errors.New("token not more valid")
 	}
 
 	var reply preAuth.ValidateAuthenticationRep

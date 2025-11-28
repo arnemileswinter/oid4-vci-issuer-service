@@ -46,7 +46,7 @@ func (g RestGateway) RequestCredential(c *gin.Context) {
 
 	if err != nil {
 		g.log.Error(err, "token error")
-		c.JSON(401, "unauthorized")
+		c.JSON(401, map[string]string{"error": "unauthorized"})
 		return
 	}
 
@@ -54,7 +54,7 @@ func (g RestGateway) RequestCredential(c *gin.Context) {
 
 	if subject == "" {
 		g.log.Error(err, "subject error")
-		c.JSON(400, "no subject present")
+		c.JSON(400, map[string]string{"error": "no subject present"})
 		return
 	}
 
@@ -81,7 +81,7 @@ func (g RestGateway) RequestCredential(c *gin.Context) {
 
 	if tenantID == "" {
 		g.log.Error(errors.ErrUnsupported, "Tenant ID Empty.", nil)
-		c.JSON(400, "Tenant ID Empty")
+		c.JSON(400, map[string]string{"error": "Tenant ID Empty"})
 		return
 	}
 
@@ -89,7 +89,7 @@ func (g RestGateway) RequestCredential(c *gin.Context) {
 
 	if err != nil {
 		g.log.Error(err, err.Error())
-		c.JSON(400, credential.ErrInvalidCredentialRequest)
+		c.JSON(401, map[string]string{"error": "unauthorized"})
 		return
 	}
 
@@ -115,7 +115,9 @@ func (g RestGateway) RequestCredential(c *gin.Context) {
 
 	if err != nil || metadata == nil {
 		g.log.Error(err, err.Error())
-		c.JSON(400, "error during getting metadata")
+		c.JSON(400, map[string]string{
+			"error": "error during getting metadata",
+		})
 		return
 	}
 
@@ -160,12 +162,25 @@ func (g RestGateway) RequestCredential(c *gin.Context) {
 		}
 	}
 
-	credential, err := g.svc.GetCredential(c, authRep, req)
-	if err != nil {
-		g.log.Error(err, "Error during Get Credential")
-		c.AbortWithError(http.StatusInternalServerError, err)
+	code, ok := token.Get("code")
+
+	if !ok {
+		code = "no code provided in token"
+	}
+
+	cc, ok := code.(string)
+
+	if !ok {
+		c.JSON(400, credential.ErrInvalidCredentialRequest)
 		return
 	}
 
-	c.JSON(http.StatusOK, credential)
+	cred, err := g.svc.GetCredential(c, authRep, req, cc)
+	if err != nil {
+		g.log.Error(err, "Error during Get Credential")
+		c.JSON(400, credential.ErrInvalidCredentialRequest)
+		return
+	}
+
+	c.JSON(http.StatusOK, cred)
 }

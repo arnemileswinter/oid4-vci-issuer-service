@@ -13,7 +13,7 @@
             "env": {
                 "ISSUANCE_LISTEN_ADDR": "0.0.0.0",
                 "ISSUANCE_NATS_URL":"nats://localhost:4222",
-                "ISSUANCE_JWKSURL":"",
+                "ISSUANCE_JWKSURL":"http://localhost:8081/.well-known/jwks.json",
                 "ISSUANCE_AUDIENCE":"",    
                 "ISSUANCE_LISTEN_PORT":"8088",
                 "DID_RESOLVER":""
