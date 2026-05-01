@@ -110,9 +110,14 @@ func (s CredentialService) Offer(ctx context.Context, req messaging.OfferingURLR
 			CredentialIssuer: *issuer,
 			Credentials:      configIds,
 			Grants: credential.Grants{
+				// Per OID4VCI Draft 13 §4.1.1, the pre-authorized_code grant
+				// only carries `pre-authorized_code` (REQUIRED), `tx_code`
+				// (OPTIONAL) and `authorization_server` (OPTIONAL). The
+				// `interval` field defined in earlier drafts has been removed.
+				// Strict wallets (walt.id Kotlin, Talao Dart) reject unknown
+				// keys here.
 				PreAuthorizedCode: &credential.PreAuthorizedCode{
 					PreAuthorizationCode: preAuthReplyData.Authentication.Code,
-					Interval:             5,
 				},
 			},
 		}
