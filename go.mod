@@ -111,4 +111,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/eclipse-xfsc/oid4-vci-vp-library => github.com/arnemileswinter/oid4-vci-vp-library v1.6.7-0.20260501211910-0b9ab0092996
+replace github.com/eclipse-xfsc/oid4-vci-vp-library => github.com/arnemileswinter/oid4-vci-vp-library v1.6.7-0.20260501223047-91aafbd602a5
