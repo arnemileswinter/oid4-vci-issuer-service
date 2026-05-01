@@ -213,27 +213,13 @@ func (s CredentialService) GetCredential(ctx context.Context, authRep *preAuth.V
 		}
 
 		return &types.GetCredentialRespImmediate{
-			Reply: common.Reply{
-				TenantId:  authRep.TenantId,
-				RequestId: authRep.RequestId,
-				GroupId:   authRep.GroupId,
-			},
 			Credential: credentialReply.Credential,
 			CNonce:     authRep.Nonce,
 			Format:     credentialReply.Format,
 		}, nil
 	}
 
-	return &types.GetCredentialRespImmediate{
-		Reply: common.Reply{
-			TenantId:  authRep.TenantId,
-			RequestId: uuid.NewString(),
-			Error: &common.Error{
-				Status: 500,
-				Msg:    "No credential reply",
-			},
-		},
-	}, nil
+	return nil, errors.New("no credential reply")
 }
 
 func (s CredentialService) GetCredentialIssuer(ctx context.Context, tenantID string, format *string, credentialConfigurations []credential.CredentialConfigurationIdentifier) (*credential.CredentialConfiguration, *string, error) {

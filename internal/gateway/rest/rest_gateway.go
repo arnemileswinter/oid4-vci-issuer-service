@@ -129,25 +129,21 @@ func (g RestGateway) RequestCredential(c *gin.Context) {
 				if c.Format == req.Format {
 					credentialConfig = c
 					req.CredentialConfigurationId = i
+					ok = true
 					break
 				}
 			}
 		}
 
-		err := req.Proof.CheckProof(g.audience, authRep.Nonce, credentialConfig.ProofTypesSupported)
-
-		if err != nil {
-			g.log.Error(err, "proof invalid")
-			c.JSON(400, credential.ErrInvalidProof)
+		if !ok {
+			g.log.Error(errors.New("unsupported format or identifier"), "unsupported format or identifier")
+			c.JSON(400, credential.ErrUnsupportedCredentialFormat)
 			return
 		}
 
-		if err != nil || metadata == nil || !ok {
-			g.log.Error(errors.New("unsupported format or identifier"), "unsupported format or identifier")
-			if err != nil {
-				g.log.Error(err, err.Error())
-			}
-			c.JSON(400, credential.ErrUnsupportedCredentialFormat)
+		if err := req.Proof.CheckProof(g.audience, authRep.Nonce, credentialConfig.ProofTypesSupported); err != nil {
+			g.log.Error(err, "proof invalid")
+			c.JSON(400, credential.ErrInvalidProof)
 			return
 		}
 	} else {
